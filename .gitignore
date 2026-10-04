@@ -1,0 +1,14 @@
+.env
+/config/cloudflare.ini
+
+/letsencrypt/*
+!/letsencrypt/.gitkeep
+
+/logs/*
+!/logs/.gitkeep
+
+/export/*
+!/export/.gitkeep
+
+/state/*
+!/state/.gitkeep
