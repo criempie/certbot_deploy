@@ -18,6 +18,7 @@ set +a
 # Обёртка запускает Certbot в контейнере и при фактическом обновлении
 # может вызвать дополнительный пользовательский скрипт на хосте.
 exec "$ROOT/scripts/run-certbot.sh" renew \
+  --work-dir /state/work \
   --dns-cloudflare \
   --dns-cloudflare-credentials /cloudflare.ini \
   --dns-cloudflare-propagation-seconds "${CLOUDFLARE_PROPAGATION_SECONDS:-60}" \

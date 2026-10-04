@@ -35,7 +35,7 @@ fi
 
 # Каталоги состояния Certbot доступны ему на запись.
 install -d -o "$CERTBOT_UID" -g "$CERTBOT_GID" -m 0750 \
-  letsencrypt logs state
+  letsencrypt logs state state/work
 
 chown -R "$CERTBOT_UID:$CERTBOT_GID" letsencrypt logs state
 

@@ -35,6 +35,7 @@ done
 # она запустит контейнер Certbot и после deploy-hook при необходимости
 # выполнит hooks/after-renew.sh на хосте.
 exec "$ROOT/scripts/run-certbot.sh" certonly \
+  --work-dir /state/work \
   --dns-cloudflare \
   --dns-cloudflare-credentials /cloudflare.ini \
   --dns-cloudflare-propagation-seconds "${CLOUDFLARE_PROPAGATION_SECONDS:-60}" \

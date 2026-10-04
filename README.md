@@ -60,9 +60,9 @@ cp config/cloudflare.ini.example config/cloudflare.ini
 Заполните `.env`:
 
 ```dotenv
-CERTBOT_UID=1001
-CERTBOT_GID=1001
-EXPORT_GID=2000
+CERTBOT_UID=
+CERTBOT_GID=
+EXPORT_GID=
 
 ACME_EMAIL=you@example.com
 CLOUDFLARE_PROPAGATION_SECONDS=60
@@ -76,28 +76,34 @@ CLOUDFLARE_PROPAGATION_SECONDS=60
 dns_cloudflare_api_token = YOUR_CLOUDFLARE_API_TOKEN
 ```
 
-Подготовьте каталоги и права:
-
-```bash
-sudo ./scripts/setup-permissions.sh
-```
-
-Скрипт создаст `letsencrypt/`, `logs/`, `export/` и `state/`, назначит владельцев и ограничит доступ к Cloudflare-конфигу. Его нужно запускать от root, потому что он меняет владельцев файлов. Если каталог `letsencrypt/` уже содержит данные, скрипт передаст их владельцу, заданному в `.env`.
-
 Сделайте управляющие скрипты исполняемыми:
 
 ```bash
 chmod +x scripts/*.sh
 ```
 
-В Compose UID/GID пользователя `certbot` также задаются явно через `CERTBOT_UID` и `CERTBOT_GID`. Поэтому не запускайте Certbot вручную напрямую из образа в обход Compose: используйте скрипты репозитория.
+Подготовьте каталоги и права:
+
+```bash
+sudo ./scripts/setup-permissions.sh
+```
+
+Скрипт создаст `letsencrypt/`, `logs/`, `export/` и `state/` (включая рабочий каталог `state/work` для Certbot), назначит владельцев и ограничит доступ к Cloudflare-конфигу. Его нужно запускать от root, потому что он меняет владельцев файлов. Если каталог `letsencrypt/` уже содержит данные, скрипт передаст их владельцу, заданному в `.env`.
+
+В Compose UID/GID пользователя `certbot` задаются явно через `CERTBOT_UID` и `CERTBOT_GID`. При ручном запуске используйте `sudo` для хостового скрипта: он удаляет старый hook-маркер в `state/` и вызывает Docker Compose. Сам процесс Certbot внутри контейнера всё равно работает под отдельным UID/GID, а его рабочий каталог расположен в доступном mount’е `state/work`.
 
 ## Первичный выпуск сертификата
 
 Перед выпуском укажите домен или домены:
 
 ```bash
-./scripts/init.sh example.com www.example.com
+sudo ./scripts/init.sh example.com www.example.com
+```
+
+Если передаёте wildcard-домен, заключите его в кавычки, чтобы shell не пытался раскрыть `*` как шаблон имени файла:
+
+```bash
+sudo ./scripts/init.sh example.com '*.example.com'
 ```
 
 Первый домен будет основным именем сертификата. Скрипт запускает `certbot certonly` с DNS-01 через Cloudflare. При успешном выпуске Certbot вызывает deploy-hook.
@@ -118,7 +124,7 @@ chmod +x scripts/*.sh
 sudo systemctl enable --now crond
 ```
 
-Здесь root запускает **хостовую команду Docker Compose**. Сам процесс Certbot внутри контейнера работает под UID/GID из `.env`. Доступ к rootful Docker фактически даёт широкие привилегии на хосте, поэтому не добавляйте пользователя в группу `docker`, если не готовы предоставить ему такие права.
+Здесь root запускает **хостовую команду Docker Compose**. Сам процесс Certbot внутри контейнера работает под UID/GID из `.env`. Доступ к rootful Docker фактически даёт широкие привилегии на хосте, поэтому не добавляйте пользователя в группу `docker`, если не готовы предоставить ему такие права. Для ручного запуска `renew.sh` также используйте `sudo`.
 
 `renew.sh` можно запускать ежедневно: Certbot проверит сертификаты и обновит только те, для которых уже подходит срок. Deploy-hook вызывается только при успешном выпуске или обновлении сертификата, а не при каждой проверке.
 
@@ -137,10 +143,10 @@ sudo systemctl enable --now crond
 Выпускает сертификат для переданных доменов:
 
 ```bash
-./scripts/init.sh example.com www.example.com
+sudo ./scripts/init.sh example.com www.example.com
 ```
 
-- Запускается вручную для первичного выпуска.
+- Запускается вручную для первичного выпуска от root, поскольку хостовая обёртка управляет маркером в `state/`.
 - Передаёт Certbot настройки Cloudflare, email и список доменов.
 - Использует тот же deploy-hook, что и продление.
 
@@ -149,7 +155,7 @@ sudo systemctl enable --now crond
 Запускает проверку и продление сертификатов через `certbot renew`.
 
 - Обычно запускается автоматически через cron.
-- Можно запустить вручную для проверки работы продления.
+- Можно запустить вручную через `sudo` для проверки работы продления.
 - Если сертификаты не требуется обновлять, пользовательские deploy-hook’и не запускаются.
 
 ### `scripts/run-certbot.sh`
