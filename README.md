@@ -191,6 +191,21 @@ chmod +x hooks/deploy.d/export-pem.sh
 
 Скрипт с суффиксом `.example` не запускается. Запускаются только файлы `*.sh` с установленным executable-битом.
 
+Если hook установлен уже после выпуска сертификата, его можно выполнить вручную, не запуская повторный выпуск. Сначала найдите точное имя lineage:
+
+```bash
+sudo ls letsencrypt/live/
+```
+
+Затем передайте путь к нему в `RENEWED_LINEAGE` и запустите экспортёр в контейнере Certbot. Например:
+
+```bash
+sudo docker compose run --rm --entrypoint /bin/sh certbot -c \
+  'RENEWED_LINEAGE=/etc/letsencrypt/live/glaemere.vjopu.me /hooks/deploy.d/export-pem.sh'
+```
+
+Замените `glaemere.vjopu.me` на имя каталога из `letsencrypt/live/` (в том числе с суффиксом вроде `-0001`, если он есть). После успешного запуска PEM-файл появится в `export/haproxy/`.
+
 ### `hooks/after-renew.sh` — необязательный хостовый скрипт
 
 Если существует исполняемый `hooks/after-renew.sh`, `run-certbot.sh` запускает его **на хосте** после вызова deploy-hook. Например, там можно вызвать мягкую перезагрузку другого сервиса.
