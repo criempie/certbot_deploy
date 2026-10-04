@@ -30,7 +30,7 @@ cat "$lineage/fullchain.pem" "$lineage/privkey.pem" > "$temporary"
 chmod 0640 "$temporary"
 
 # Каталог export/haproxy имеет setgid, поэтому файл наследует
-# группу CERT_EXPORT_GID без вызова chgrp.
+# группу EXPORT_GID без вызова chgrp.
 mv -f "$temporary" "$output"
 
 # Временный файл перемещён; очистка больше не нужна.

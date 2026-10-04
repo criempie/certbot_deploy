@@ -11,7 +11,7 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-# UID/GID должны быть заданы в .env простыми shell-совместимыми строками.
+# CERTBOT_UID/CERTBOT_GID должны быть заданы в .env простыми shell-совместимыми строками.
 if [[ ! -f .env ]]; then
   echo "Сначала создайте .env из .env.example" >&2
   exit 1
@@ -21,8 +21,8 @@ set -a
 source ./.env
 set +a
 
-: "${UID:?Не задан UID}"
-: "${GID:?Не задан GID}"
+: "${CERTBOT_UID:?Не задан CERTBOT_UID}"
+: "${CERTBOT_GID:?Не задан CERTBOT_GID}"
 : "${EXPORT_GID:?Не задан EXPORT_GID}"
 
 # Создаём каталоги конфигурации и deploy-hook'ов.
@@ -34,10 +34,10 @@ if [[ ! -f config/cloudflare.ini ]]; then
 fi
 
 # Каталоги состояния Certbot доступны ему на запись.
-install -d -o "$UID" -g "$GID" -m 0750 \
+install -d -o "$CERTBOT_UID" -g "$CERTBOT_GID" -m 0750 \
   letsencrypt logs state
 
-chown -R "$UID:$GID" letsencrypt logs state
+chown -R "$CERTBOT_UID:$CERTBOT_GID" letsencrypt logs state
 
 # Родительский export доступен для просмотра и прохода, но не для записи.
 # Владелец root не даёт Certbot создавать в нём произвольные каталоги.
@@ -49,7 +49,7 @@ chmod 0755 export
 # Certbot — владелец и может записывать; группа HAProxy может читать и
 # проходить в каталог; остальные пользователи доступа не имеют.
 mkdir -p export/haproxy
-chown -R "$UID:$EXPORT_GID" export/haproxy
+chown -R "$CERTBOT_UID:$EXPORT_GID" export/haproxy
 
 # setgid на каталогах обеспечивает наследование группы EXPORT_GID.
 find export/haproxy -type d -exec chmod 2750 {} +
@@ -58,7 +58,7 @@ find export/haproxy -type d -exec chmod 2750 {} +
 find export/haproxy -type f -exec chmod 0640 {} +
 
 # Cloudflare API Token доступен только пользователю Certbot.
-chown "$UID:$GID" config/cloudflare.ini
+chown "$CERTBOT_UID:$CERTBOT_GID" config/cloudflare.ini
 chmod 0600 config/cloudflare.ini
 
 echo "Каталоги и права подготовлены."

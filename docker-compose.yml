@@ -1,7 +1,7 @@
 services:
   certbot:
     image: certbot/dns-cloudflare:v5.6.0
-    user: "${UID}:${GID}"
+    user: "${CERTBOT_UID}:${CERTBOT_GID}"
     group_add:
       - "${EXPORT_GID}"
 

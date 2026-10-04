@@ -12,26 +12,31 @@ Certbot запускается в Docker-контейнере и получае�
 
 ## Создание пользователя и групп
 
-На хосте создайте отдельного системного пользователя `certbot` и группу для файлов экспорта:
+На хосте создайте отдельного системного пользователя `certbot` и группы для Certbot и экспорта сертификатов. Домашний каталог этому пользователю не нужен: он не входит в систему, а Certbot хранит данные в каталогах проекта.
 
-```bash
-sudo groupadd --system certbot
-sudo groupadd --gid 2000 haproxy-certs
-sudo useradd --system \
-  --gid certbot \
-  --groups haproxy-certs \
-  --home-dir /var/lib/certbot \
-  --shell /sbin/nologin \
-  certbot
-```
-
-Перед созданием группы проверьте, что GID `2000` свободен:
+Сначала проверьте, что GID `2000` свободен:
 
 ```bash
 getent group 2000
 ```
 
-Если команда что-то вывела, выберите другой свободный GID и используйте его далее.
+Если команда что-то вывела, выберите другой свободный GID и подставьте его вместо `2000` в следующих шагах и в `.env`.
+
+```bash
+# Основная системная группа пользователя Certbot.
+sudo groupadd --system certbot
+
+# Общая группа для доступа к экспортированным сертификатам.
+sudo groupadd --gid 2000 haproxy-certs
+
+# Служебная учётная запись: основная группа — certbot,
+# дополнительная — haproxy-certs; интерактивный вход запрещён.
+sudo useradd --system \
+  --gid certbot \
+  --groups haproxy-certs \
+  --shell /sbin/nologin \
+  certbot
+```
 
 Получите числовые UID/GID пользователя и группы:
 
@@ -55,15 +60,15 @@ cp config/cloudflare.ini.example config/cloudflare.ini
 Заполните `.env`:
 
 ```dotenv
-UID=1001
-GID=1001
+CERTBOT_UID=1001
+CERTBOT_GID=1001
 EXPORT_GID=2000
 
 ACME_EMAIL=you@example.com
 CLOUDFLARE_PROPAGATION_SECONDS=60
 ```
 
-Замените числа на UID пользователя `certbot`, GID его основной группы и GID группы `haproxy-certs`, полученные командами выше.
+Замените значения на UID пользователя `certbot`, GID его основной группы и GID группы `haproxy-certs`, полученные командами выше.
 
 Укажите Cloudflare API Token в `config/cloudflare.ini`:
 
@@ -85,7 +90,7 @@ sudo ./scripts/setup-permissions.sh
 chmod +x scripts/*.sh
 ```
 
-В Compose UID/GID также задаются явно. Поэтому не запускайте Certbot вручную напрямую из образа в обход Compose: используйте скрипты репозитория.
+В Compose UID/GID пользователя `certbot` также задаются явно через `CERTBOT_UID` и `CERTBOT_GID`. Поэтому не запускайте Certbot вручную напрямую из образа в обход Compose: используйте скрипты репозитория.
 
 ## Первичный выпуск сертификата
 
@@ -235,9 +240,9 @@ Certbot вызывает deploy-hook после успешного выпуск�
 
 ## Экспорт сертификатов и доступ HAProxy
 
-Пример `export-pem.sh` собирает `fullchain.pem` и `privkey.pem` в файл `/export/<имя-lineage>.pem`. Каталог `export/` принадлежит пользователю Certbot и группе `CERT_EXPORT_GID`; режим `setgid` обеспечивает наследование группы новыми файлами. PEM-файлы создаются с режимом `0640`.
+Пример `export-pem.sh` собирает `fullchain.pem` и `privkey.pem` в файл `/export/haproxy/<имя-lineage>.pem`. Каталог `export/haproxy/` принадлежит пользователю Certbot и группе `EXPORT_GID`; режим `setgid` обеспечивает наследование группы новыми файлами. Каталоги доступны владельцу и группе (`2750`), PEM-файлы создаются с режимом `0640`.
 
-В Compose HAProxy подключите этот каталог **только для чтения** и добавьте ту же числовую группу:
+В Compose HAProxy подключите каталог `export/haproxy/` **только для чтения** и добавьте ту же числовую группу:
 
 ```yaml
 services:
@@ -245,10 +250,10 @@ services:
     group_add:
       - "2000"
     volumes:
-      - /srv/certbot/export:/etc/haproxy/certs:ro
+      - /srv/certbot/export/haproxy:/etc/haproxy/certs:ro
 ```
 
-Замените `2000` на значение `CERT_EXPORT_GID`, а путь — на абсолютный путь к каталогу `export/` на хосте. HAProxy не нужно давать доступ к `letsencrypt/live/`.
+`group_add` добавляет процессам внутри контейнера HAProxy дополнительную группу по числовому GID. Замените `2000` на значение `EXPORT_GID` из `.env` Certbot и укажите абсолютный путь к каталогу `export/haproxy/` на хосте. Compose-проект HAProxy не получает `.env` другого проекта автоматически. HAProxy не нужно давать доступ к `letsencrypt/live/`.
 
 При использовании экспортируемых PEM-файлов настройте HAProxy на каталог `/etc/haproxy/certs/`. В этом варианте HAProxy не должен пытаться самостоятельно читать исходный каталог Certbot или заново собирать PEM-файлы из `letsencrypt/live/`.
 
@@ -256,10 +261,12 @@ services:
 
 ## Rocky Linux и SELinux
 
-Если SELinux включён и Docker сообщает об отказе доступа к bind mount, добавьте SELinux-метки в `volumes`:
+Если SELinux включён и Docker сообщает об отказе доступа к bind mount, добавьте SELinux-метки в `volumes`. Это метки SELinux, а не Unix-права и не группы:
 
-- `:Z` — для каталога, используемого только Certbot;
-- `:z` — для общего каталога `export/`, который используют Certbot и HAProxy.
+- `:Z` — помечает каталог для использования одним контейнером; не используйте для данных, которые одновременно нужны Certbot и HAProxy;
+- `:z` — помечает каталог как общий для нескольких контейнеров; используйте для экспорта, к которому обращаются Certbot и HAProxy.
+
+Docker меняет SELinux-контекст каталога на хосте. Не ставьте `:Z` на общий каталог экспорта: приватная метка одного контейнера может закрыть доступ другому.
 
 Например, для общего экспорта в Compose Certbot:
 
@@ -270,7 +277,7 @@ services:
 А в Compose HAProxy:
 
 ```yaml
-- /srv/certbot/export:/etc/haproxy/certs:ro,z
+- /srv/certbot/export/haproxy:/etc/haproxy/certs:ro,z
 ```
 
 Если репозиторий расположен по другому пути, используйте соответствующий абсолютный путь на хосте.
