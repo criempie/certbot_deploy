@@ -1,0 +1,18 @@
+services:
+  certbot:
+    image: certbot/dns-cloudflare:v5.6.0
+    user: "${UID}:${GID}"
+    group_add:
+      - "${EXPORT_GID}"
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./config/cloudflare.ini:/cloudflare.ini:ro
+      - ./logs:/var/log/letsencrypt
+      - ./export:/export
+      - ./state:/state
+      - ./hooks:/hooks:ro
+      - ./scripts/run-deploy-hooks.sh:/usr/local/bin/run-deploy-hooks.sh:ro
